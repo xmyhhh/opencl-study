@@ -1,0 +1,7 @@
+build/
+install/
+
+# vim
+*~
+.*.sw[op]
+.vscode
