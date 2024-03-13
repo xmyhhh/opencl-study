@@ -15,6 +15,8 @@
 #include <tbb/tbb.h>
 #include <atomic>
 #include <mutex>
+#include <random>
+#include "common/timer.h"
 
 void histogram() {
     //read ppm
@@ -45,6 +47,20 @@ void histogram() {
         int width;
         int height;
         std::vector<RGB> data;
+
+        void random_generate(int size) {
+            width = size;
+            height = size;
+            data.resize(pixels());
+            std::random_device rd; // obtain a random number from hardware
+            std::mt19937 gen(rd()); // seed the generator
+            std::uniform_int_distribution<> distr(0, 255); // define the range
+
+            for (int i = 0; i < pixels(); i++) {
+                data[i] = {distr(gen), distr(gen), distr(gen)};
+            }
+        }
+
     };
 
     struct Histogram {
@@ -133,12 +149,14 @@ void histogram() {
 
     auto histogram_cpu = [](const PPM &ppm) {
         Histogram his;
-
+        __int64 begin = GetTickCount();
         for (int i = 0; i < ppm.pixels(); i++) {
             for (int j = 0; j < 3; j++) {
                 his.value[j][ppm.data[i][j]]++;
             }
         }
+        auto end = GetTickCount() - begin;
+        std::cout << "\rDone.      " + std::to_string(end / 1000.0) + "           \n";
         return his;
     };
 
@@ -146,7 +164,7 @@ void histogram() {
         Histogram his;
         std::mutex lock;
 
-
+        __int64 begin = GetTickCount();
         tbb::parallel_for(tbb::blocked_range<size_t>(0, ppm.pixels()),
                           [&](const tbb::blocked_range<size_t> &r) {
                               for (size_t i = r.begin(); i != r.end(); ++i) {
@@ -158,8 +176,38 @@ void histogram() {
                               }
                           }
         );
+        auto end = GetTickCount() - begin;
+        std::cout << "\rDone.      " + std::to_string(end / 1000.0) + "           \n";
         return his;
     };
+
+
+    auto histogram_cpu_tbb_local = [](const PPM &ppm) {
+        Histogram his;
+        std::mutex lock;
+        __int64 begin = GetTickCount();
+        tbb::parallel_for(tbb::blocked_range<size_t>(0, ppm.pixels(), 100),
+                          [&](const tbb::blocked_range<size_t> &r) {
+                              Histogram local;
+                              for (size_t i = r.begin(); i != r.end(); ++i) {
+                                  for (int j = 0; j < 3; j++) {
+                                      local.value[j][ppm.data[i][j]]++;
+                                  }
+                              }
+                              lock.lock();
+                              for (int i = 0; i < 256; ++i) {
+                                  for (int j = 0; j < 3; j++) {
+                                      his.value[j][i] += local.value[j][i];
+                                  }
+                              }
+                              lock.unlock();
+                          }
+        );
+        auto end = GetTickCount() - begin;
+        std::cout << "\rDone.      " + std::to_string(end / 1000.0) + "           \n";
+        return his;
+    };
+
 
     auto histogram_opencl = [](const PPM &ppm) {
         //get all platforms (drivers)
@@ -241,15 +289,21 @@ void histogram() {
 
     };
 
+
     PPM ppm;
-    load_ppm("./example.ppm", ppm);
+    //load_ppm("./example.ppm", ppm);
+    ppm.random_generate(10000);
+
     auto his1 = histogram_cpu(ppm);
-    his1.print();
+
 
     auto his2 = histogram_cpu_tbb(ppm);
-    his2.print();
 
-    std::cout << "his1 == his2: " << std::to_string(his1 == his2);
 
+    auto his3 = histogram_cpu_tbb_local(ppm);
+
+
+    std::cout << "his1 == his2: " << std::to_string(his1 == his2) << std::endl;
+    std::cout << "his1 == his3: " << std::to_string(his1 == his3) << std::endl;
     int a = 0;
 }
