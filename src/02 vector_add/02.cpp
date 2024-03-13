@@ -63,7 +63,7 @@ void vector_add(){
     int A[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
     int B[] = { 0, 1, 2, 0, 1, 2, 0, 1, 2, 0 };
 
-    //create queue to which we will push commands for 	the device.
+    //create queue to which we will push commands for the device.
     cl::CommandQueue queue(context, default_device);
 
     //write arrays A and B to the device

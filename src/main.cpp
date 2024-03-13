@@ -4,10 +4,11 @@
 
 extern void device_test();
 extern void vector_add();
-
+extern void histogram();
 int main(){
 
     //device_test();
-    vector_add();
+    //vector_add();
+    histogram();
     return 0;
 }

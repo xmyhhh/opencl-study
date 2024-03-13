@@ -12,7 +12,7 @@ set(BUILD_SHARED_LIBS OFF)
 set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} C:/local/boost_1_84_0/lib64-msvc-14.0/cmake/Boost-1.84.0)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DNOMINMAX -D_USE_MATH_DEFINES /bigobj")
 
-
+add_subdirectory(third/tbb)
 add_subdirectory(third/OpenCL)
 #if( NOT OpenCL_FOUND )
 #    MESSAGE( SEND_ERROR "OpenCL not found. Install SDK from NVidia (CUDA), AMD or Intell" )
@@ -32,4 +32,5 @@ target_link_libraries(MAIN
         OpenCL::OpenCL
         OpenCL::Headers
         OpenCL::HeadersCpp
+		tbb_static
 )
