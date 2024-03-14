@@ -282,7 +282,7 @@ void histogram() {
 
     PPM ppm;
     //load_ppm("./example.ppm", ppm);
-    ppm.random_generate(10000);
+    ppm.random_generate(1000);
 
     //auto his1 = histogram_cpu(ppm);
 
