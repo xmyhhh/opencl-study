@@ -1,7 +1,7 @@
 //
 // Created by xmyci on 05/03/2024.
 //
-#define __CL_ENABLE_EXCEPTIONS
+#define CL_HPP_ENABLE_EXCEPTIONS
 
 #include <iostream>
 #include <iostream>
@@ -17,6 +17,7 @@
 #include <mutex>
 #include <random>
 #include "common/timer.h"
+#include "kernel_histogram.h"
 
 void histogram() {
     //read ppm
@@ -181,7 +182,6 @@ void histogram() {
         return his;
     };
 
-
     auto histogram_cpu_tbb_local = [](const PPM &ppm) {
         Histogram his;
         std::mutex lock;
@@ -208,8 +208,8 @@ void histogram() {
         return his;
     };
 
-
     auto histogram_opencl = [](const PPM &ppm) {
+        Histogram his;
         //get all platforms (drivers)
         std::vector<cl::Platform> all_platforms;
         cl::Platform::get(&all_platforms);
@@ -238,11 +238,9 @@ void histogram() {
 
         cl::Program::Sources sources;
         // kernel calculates for each element C=A+B
-        const char *stringifiedSourceCL =
 
-#include "kernel.cl"
-
-        sources.push_back(std::string(stringifiedSourceCL));
+        Kernel_histogram k;
+        sources.push_back(k.get_kernel_code());
 
         cl::Program program(context, sources);
         try {
@@ -253,40 +251,32 @@ void histogram() {
                       program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(default_device) << "\n";
             exit(1);
         }
-
+        //std::array<std::array<int, 256>, 3> value;
         // create buffers on the device
-        cl::Buffer buffer_A(context, CL_MEM_READ_WRITE, sizeof(int) * 10);
-        cl::Buffer buffer_B(context, CL_MEM_READ_WRITE, sizeof(int) * 10);
-        cl::Buffer buffer_C(context, CL_MEM_READ_WRITE, sizeof(int) * 10);
+        cl::Buffer buffer_A(context, CL_MEM_READ_WRITE, sizeof(int) * ppm.pixels());
 
-        int A[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
-        int B[] = {0, 1, 2, 0, 1, 2, 0, 1, 2, 0};
+        cl::Buffer buffer_C(context, CL_MEM_READ_WRITE, sizeof(int) * 3 * 256);
 
         //create queue to which we will push commands for the device.
         cl::CommandQueue queue(context, default_device);
 
         //write arrays A and B to the device
-        queue.enqueueWriteBuffer(buffer_A, CL_TRUE, 0, sizeof(int) * 10, A);
-        queue.enqueueWriteBuffer(buffer_B, CL_TRUE, 0, sizeof(int) * 10, B);
+        queue.enqueueWriteBuffer(buffer_A, CL_TRUE, 0, sizeof(int) * ppm.pixels(), ppm.data.data());
 
-        cl::Kernel kernel(program, "simple_add");
+
+        cl::Kernel kernel(program, "histogram");
 
         kernel.setArg(0, buffer_A);
-        kernel.setArg(1, buffer_B);
+
         kernel.setArg(2, buffer_C);
         queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(10), cl::NullRange);
 
-        int C[10];
+        int C[3 * 256];
         //read result C from the device to array C
-        queue.enqueueReadBuffer(buffer_C, CL_TRUE, 0, sizeof(int) * 10, C);
+        queue.enqueueReadBuffer(buffer_C, CL_TRUE, 0, sizeof(int) * 3 * 256, C);
         queue.finish();
 
-        std::cout << " result: \n";
-        for (int i = 0; i < 10; i++) {
-            std::cout << C[i] << " ";
-        }
-        std::cout << std::endl;
-
+        return his;
     };
 
 
@@ -294,16 +284,15 @@ void histogram() {
     //load_ppm("./example.ppm", ppm);
     ppm.random_generate(10000);
 
-    auto his1 = histogram_cpu(ppm);
+    //auto his1 = histogram_cpu(ppm);
 
+    //auto his2 = histogram_cpu_tbb(ppm);
 
-    auto his2 = histogram_cpu_tbb(ppm);
+    //auto his3 = histogram_cpu_tbb_local(ppm);
 
+    auto his4 = histogram_opencl(ppm);
 
-    auto his3 = histogram_cpu_tbb_local(ppm);
-
-
-    std::cout << "his1 == his2: " << std::to_string(his1 == his2) << std::endl;
-    std::cout << "his1 == his3: " << std::to_string(his1 == his3) << std::endl;
+    //std::cout << "his1 == his2: " << std::to_string(his1 == his2) << std::endl;
+    //std::cout << "his1 == his3: " << std::to_string(his1 == his3) << std::endl;
     int a = 0;
 }

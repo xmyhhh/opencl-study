@@ -1,7 +1,7 @@
 //
 // Created by xmyci on 05/03/2024.
 //
-#define __CL_ENABLE_EXCEPTIONS
+#define CL_HPP_ENABLE_EXCEPTIONS
 
 #include <iostream>
 #include <iostream>
@@ -11,6 +11,9 @@
 #include <exception>
 
 #include <CL/opencl.hpp>
+#include "kernel_add.h"
+
+
 void vector_add(){
     //get all platforms (drivers)
     std::vector<cl::Platform> all_platforms;
@@ -40,10 +43,8 @@ void vector_add(){
 
     cl::Program::Sources sources;
     // kernel calculates for each element C=A+B
-    const char* stringifiedSourceCL =
-        #include "kernel.cl"
-
-    sources.push_back(std::string(stringifiedSourceCL));
+    Kernel_add k;
+    sources.push_back(k.get_kernel_code());
 
     cl::Program program(context, sources);
     try {
@@ -70,7 +71,7 @@ void vector_add(){
     queue.enqueueWriteBuffer(buffer_A, CL_TRUE, 0, sizeof(int) * 10, A);
     queue.enqueueWriteBuffer(buffer_B, CL_TRUE, 0, sizeof(int) * 10, B);
 
-    cl::Kernel kernel(program, "simple_add");
+    cl::Kernel kernel(program, "add");
 
     kernel.setArg(0, buffer_A);
     kernel.setArg(1, buffer_B);
