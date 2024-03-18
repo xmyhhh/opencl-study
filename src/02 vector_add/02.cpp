@@ -44,6 +44,7 @@ void vector_add(){
     cl::Program::Sources sources;
     // kernel calculates for each element C=A+B
     Kernel_add k;
+
     sources.push_back(k.get_kernel_code());
 
     cl::Program program(context, sources);

@@ -221,7 +221,7 @@ void histogram() {
             std::cout << "found platform: " << all_platforms[i].getInfo<CL_PLATFORM_NAME>() << "\n";
         }
 
-        cl::Platform default_platform = all_platforms[0];
+        cl::Platform default_platform = all_platforms[2];
         std::cout << "Using platform: " << default_platform.getInfo<CL_PLATFORM_NAME>() << "\n";
 
         //get default device of the default platform
@@ -244,36 +244,38 @@ void histogram() {
 
         cl::Program program(context, sources);
         try {
-            program.build({default_device});
+            program.build({default_device}, "-g -s \"C:\\Users\\xmyci\\Desktop\\opencl-study\\src\\03 histogram\\kernel_histogram.cpp\"");
         }
         catch (cl::Error err) {
             std::cout << " Error building: " <<
                       program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(default_device) << "\n";
             exit(1);
         }
-        //std::array<std::array<int, 256>, 3> value;
-        // create buffers on the device
-        cl::Buffer buffer_A(context, CL_MEM_READ_WRITE, sizeof(int) * ppm.pixels());
-
-        cl::Buffer buffer_C(context, CL_MEM_READ_WRITE, sizeof(int) * 3 * 256);
 
         //create queue to which we will push commands for the device.
         cl::CommandQueue queue(context, default_device);
 
-        //write arrays A and B to the device
-        queue.enqueueWriteBuffer(buffer_A, CL_TRUE, 0, sizeof(int) * ppm.pixels(), ppm.data.data());
+        const int imageElements = ppm.pixels();
+        // create buffers on the device
+        cl::Buffer buffer_image(context, CL_MEM_READ_WRITE, sizeof(int) * ppm.pixels());
+        cl::Buffer buffer_B(context, CL_MEM_READ_WRITE, sizeof(int));
+        cl::Buffer buffer_histogram(context, CL_MEM_READ_WRITE, sizeof(int) * 3 * 256);
 
+        //write image to the device
+        int zero = 0;
+        queue.enqueueWriteBuffer(buffer_image, CL_TRUE, 0, sizeof(int) * ppm.pixels(), ppm.data.data());
+        queue.enqueueFillBuffer(buffer_histogram, &zero, 0, sizeof(int) * 3 * 256, NULL, NULL);
 
         cl::Kernel kernel(program, "histogram");
+        kernel.setArg(0, buffer_image);
+        kernel.setArg(1, sizeof(int), &imageElements);
+        kernel.setArg(2, buffer_histogram);
 
-        kernel.setArg(0, buffer_A);
-
-        kernel.setArg(2, buffer_C);
-        queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(10), cl::NullRange);
+        queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(1024), cl::NDRange(64));
 
         int C[3 * 256];
         //read result C from the device to array C
-        queue.enqueueReadBuffer(buffer_C, CL_TRUE, 0, sizeof(int) * 3 * 256, C);
+        queue.enqueueReadBuffer(buffer_histogram, CL_TRUE, 0, sizeof(int) * 3 * 256, C);
         queue.finish();
 
         return his;
