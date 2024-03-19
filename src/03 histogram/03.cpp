@@ -19,6 +19,7 @@
 #include "common/timer.h"
 #include "kernel_histogram.h"
 #include "common/opencl-warpper/opencl.hpp"
+
 void histogram() {
     //read ppm
     struct RGB {
@@ -216,7 +217,7 @@ void histogram() {
         return his;
     };
 
-    auto histogram_opencl = [](const PPM &ppm) {
+    auto histogram_opencl = [](const PPM &ppm, int device_id) {
         __int64 begin = GetTickCount();
 
 
@@ -249,7 +250,7 @@ void histogram() {
             std::cout << "found platform: " << all_platforms[i].getInfo<CL_PLATFORM_NAME>() << "\n";
         }
 
-        cl::Platform default_platform = all_platforms[0];
+        cl::Platform default_platform = all_platforms[device_id];
         std::cout << "Using platform: " << default_platform.getInfo<CL_PLATFORM_NAME>() << "\n";
 
         //get default device of the default platform
@@ -315,7 +316,7 @@ void histogram() {
 
     PPM ppm;
     //load_ppm("./example.ppm", ppm);
-    ppm.random_generate(20000);
+    ppm.random_generate(15000);
 
 //    auto his1 = histogram_cpu(ppm);
 
@@ -323,11 +324,17 @@ void histogram() {
 
     auto his3 = histogram_cpu_tbb_local(ppm);
 
-    auto his4 = histogram_opencl(ppm);
+    auto his4 = histogram_opencl(ppm, 0); //nv gpu
+
+    auto his5 = histogram_opencl(ppm, 1); //intel gpu
+
+    auto his6 = histogram_opencl(ppm, 2);//cpu
 
     std::cout << std::endl;
     //std::cout << "his1 == his2: " << std::to_string(his1 == his2) << std::endl;
     //std::cout << "his1 == his3: " << std::to_string(his1 == his3) << std::endl;
     std::cout << "his1 == his4: " << std::to_string(his3 == his4) << std::endl;
-    int a = 0;
+
+    std::cout << "his4 == his5 == his6: " << std::to_string(his4 == his5 && his5 == his6) << std::endl;
+
 }
