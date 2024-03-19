@@ -11,7 +11,7 @@ class kernel_warpper {
 protected:
     std::string kernel_code;
 public:
-    std::string get_kernel_code();
+    std::string get_kernel_code(bool debug = false);
 };
 
 

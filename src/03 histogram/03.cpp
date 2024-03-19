@@ -18,7 +18,7 @@
 #include <random>
 #include "common/timer.h"
 #include "kernel_histogram.h"
-
+#include "common/opencl-warpper/opencl.hpp"
 void histogram() {
     //read ppm
     struct RGB {
@@ -41,25 +41,34 @@ void histogram() {
             height = 0;
         }
 
-        int pixels() const {
+        size_t pixels() const {
             return width * height;
         }
 
-        int width;
-        int height;
+        size_t width;
+        size_t height;
         std::vector<RGB> data;
 
         void random_generate(int size) {
             width = size;
             height = size;
-            data.resize(pixels());
+            auto l = pixels();
+            data.resize(l);
             std::random_device rd; // obtain a random number from hardware
             std::mt19937 gen(rd()); // seed the generator
             std::uniform_int_distribution<> distr(0, 255); // define the range
 
-            for (int i = 0; i < pixels(); i++) {
-                data[i] = {distr(gen), distr(gen), distr(gen)};
-            }
+            tbb::parallel_for(tbb::blocked_range<size_t>(0, pixels()),
+                              [&](const tbb::blocked_range<size_t> &r) {
+                                  for (size_t i = r.begin(); i != r.end(); ++i) {
+                                      data[i] = {distr(gen), distr(gen), distr(gen)};
+                                      //data[i] = {1, 2, 3};
+                                  }
+                              }
+            );
+//            for (int i = 0; i < pixels(); i++) {
+//                data[i] = {distr(gen), distr(gen), distr(gen)};
+//            }
         }
 
     };
@@ -139,8 +148,7 @@ void histogram() {
                 sscanf(bufferp, "%d %d", &ppm.width, &ppm.height);
                 ppm.data.resize(ppm.width * ppm.height);
                 read_line(buffer, fp, &line_count); //255
-            }
-            else {
+            } else {
                 sscanf(bufferp, "%d %d %d", &ppm.data[index].r, &ppm.data[index].g, &ppm.data[index].b);
                 index++;
             }
@@ -209,6 +217,26 @@ void histogram() {
     };
 
     auto histogram_opencl = [](const PPM &ppm) {
+        __int64 begin = GetTickCount();
+
+
+//        vector<Device_Info> devices; // get all devices of all platforms
+//        vector<cl::Platform> cl_platforms; // get all platforms (drivers)
+//        cl::Platform::get(&cl_platforms);
+//        uint id = 0u;
+//        for (uint i = 0u; i < (uint) cl_platforms.size(); i++) {
+//            vector<cl::Device> cl_devices;
+//            cl_platforms[i].getDevices(CL_DEVICE_TYPE_ALL, &cl_devices);
+//            //cl::Context cl_context(cl_devices); // same cl::Context for all devices (allocates extra VRAM on all other unused Nvidia GPUs)
+//            for (uint j = 0u; j < (uint) cl_devices.size(); j++) {
+//                cl::Context cl_context(cl_devices[j]); // separate cl::Context for each device
+//                devices.push_back(Device_Info(cl_devices[j], cl_context, id++));
+//            }
+//        }
+
+
+
+
         Histogram his;
         //get all platforms (drivers)
         std::vector<cl::Platform> all_platforms;
@@ -221,7 +249,7 @@ void histogram() {
             std::cout << "found platform: " << all_platforms[i].getInfo<CL_PLATFORM_NAME>() << "\n";
         }
 
-        cl::Platform default_platform = all_platforms[2];
+        cl::Platform default_platform = all_platforms[0];
         std::cout << "Using platform: " << default_platform.getInfo<CL_PLATFORM_NAME>() << "\n";
 
         //get default device of the default platform
@@ -244,7 +272,7 @@ void histogram() {
 
         cl::Program program(context, sources);
         try {
-            program.build({default_device}, "-g -s \"C:\\Users\\xmyci\\Desktop\\opencl-study\\src\\03 histogram\\kernel_histogram.cpp\"");
+            program.build({default_device});
         }
         catch (cl::Error err) {
             std::cout << " Error building: " <<
@@ -257,14 +285,15 @@ void histogram() {
 
         const int imageElements = ppm.pixels();
         // create buffers on the device
-        cl::Buffer buffer_image(context, CL_MEM_READ_WRITE, sizeof(int) * ppm.pixels());
+        cl::Buffer buffer_image(context, CL_MEM_READ_WRITE, sizeof(int) * ppm.pixels() * 3);
         cl::Buffer buffer_B(context, CL_MEM_READ_WRITE, sizeof(int));
-        cl::Buffer buffer_histogram(context, CL_MEM_READ_WRITE, sizeof(int) * 3 * 256);
+        cl::Buffer buffer_histogram(context, CL_MEM_READ_WRITE, sizeof(int) * 256 * 3);
 
         //write image to the device
         int zero = 0;
-        queue.enqueueWriteBuffer(buffer_image, CL_TRUE, 0, sizeof(int) * ppm.pixels(), ppm.data.data());
-        queue.enqueueFillBuffer(buffer_histogram, &zero, 0, sizeof(int) * 3 * 256, NULL, NULL);
+        auto aa = sizeof(int) * ppm.pixels() * 3;
+        queue.enqueueWriteBuffer(buffer_image, CL_TRUE, 0, sizeof(int) * ppm.pixels() * 3, ppm.data.data());
+        queue.enqueueFillBuffer(buffer_histogram, zero, 0, sizeof(int) * 256 * 3, NULL, NULL);
 
         cl::Kernel kernel(program, "histogram");
         kernel.setArg(0, buffer_image);
@@ -273,28 +302,32 @@ void histogram() {
 
         queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(1024), cl::NDRange(64));
 
-        int C[3 * 256];
-        //read result C from the device to array C
-        queue.enqueueReadBuffer(buffer_histogram, CL_TRUE, 0, sizeof(int) * 3 * 256, C);
+//        int C[256 * 3];
+//      /read result C from the device to array C
+        queue.enqueueReadBuffer(buffer_histogram, CL_TRUE, 0, sizeof(int) * 256 * 3, his.value.data());
         queue.finish();
 
+        auto end = GetTickCount() - begin;
+        std::cout << "\rDone.      " + std::to_string(end / 1000.0) + "           \n";
         return his;
     };
 
 
     PPM ppm;
     //load_ppm("./example.ppm", ppm);
-    ppm.random_generate(1000);
+    ppm.random_generate(20000);
 
-    //auto his1 = histogram_cpu(ppm);
+//    auto his1 = histogram_cpu(ppm);
 
     //auto his2 = histogram_cpu_tbb(ppm);
 
-    //auto his3 = histogram_cpu_tbb_local(ppm);
+    auto his3 = histogram_cpu_tbb_local(ppm);
 
     auto his4 = histogram_opencl(ppm);
 
+    std::cout << std::endl;
     //std::cout << "his1 == his2: " << std::to_string(his1 == his2) << std::endl;
     //std::cout << "his1 == his3: " << std::to_string(his1 == his3) << std::endl;
+    std::cout << "his1 == his4: " << std::to_string(his3 == his4) << std::endl;
     int a = 0;
 }

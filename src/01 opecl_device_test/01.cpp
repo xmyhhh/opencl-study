@@ -2,11 +2,9 @@
 // Created by xmyci on 05/03/2024.
 //
 #include <iostream>
-#include <iostream>
+
 #include <vector>
-#include <algorithm>
-#include <fstream>
-#include <exception>
+
 
 #include <CL/opencl.hpp>
 

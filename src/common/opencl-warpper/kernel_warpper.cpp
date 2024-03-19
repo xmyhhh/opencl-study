@@ -36,7 +36,7 @@ void print_with_line_num(std::string input) {
 }
 
 
-std::string kernel_warpper::get_kernel_code() {
+std::string kernel_warpper::get_kernel_code(bool debug) {
     using namespace std;
     string r = kernel_code;
     //r = replace(r, " ", "\n"); // replace all spaces by new lines
@@ -46,7 +46,7 @@ std::string kernel_warpper::get_kernel_code() {
     r = replace(r, "#if\n", "#if "); // don't leave any spaces in arguments
     r = replace(r, "#elif\n", "#elif "); // don't leave any spaces in arguments
     r = replace(r, "#pragma\n", "#pragma ");
-    if (true)
+    if (debug)
         print_with_line_num("\n" + r);
 
     return "\n" + r;
